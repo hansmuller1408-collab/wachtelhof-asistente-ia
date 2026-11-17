@@ -1,0 +1,13 @@
+# WACHTEL HOF — Configuración de deploy en Render
+# render.com → New Web Service → conectar este repo → Render lo detecta solo
+services:
+  - type: web
+    name: wachtelhof-asistente-ia
+    runtime: node
+    region: oregon          # el más cercano con plan gratuito
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 10000        # Render asigna este puerto por defecto
+    autoDeploy: true        # re-deploy automático al hacer push
