@@ -26,7 +26,7 @@ app.use(cors({
   ],
   methods: ['POST', 'GET', 'OPTIONS'],
 }));
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '60kb' }));
 
 // ── System prompt: identidad y conocimiento de Panchita ─────
 // Cargado desde el archivo de reglas del asistente + datos clave del negocio
@@ -86,7 +86,32 @@ REGLAS:
 - En modo tienda (cliente): ayuda con pedidos, envíos, productos, referidos
 
 Horario de atención: Lunes a Sábado 09:00–19:00.
-Cierre amable: "¿Hay algo más en lo que te pueda ayudar? 🥚"`;
+CONVERSACIÓN CONTINUA:
+- Esta es una conversación en curso. Al abrir el chat el usuario ya recibió un saludo de bienvenida: NO saludes, NO digas "hola" ni te presentes en tus respuestas.
+- Ve directo a responder y usa el contexto de los mensajes anteriores (si el usuario dice "¿y a Temuco?" o "¿y el x24?", entiende a qué se refiere).
+- No termines todas las respuestas con la misma pregunta de cierre; ofrece más ayuda solo cuando tenga sentido.
+- Escribe breve y natural, como en un chat.`;
+
+// ── Historial: convierte los mensajes previos al formato multi-turno de Gemini ──
+function construirContenido(history, promptFinal) {
+  const turnos = [];
+  if (Array.isArray(history)) {
+    for (const m of history.slice(-12)) {
+      if (!m || typeof m.texto !== 'string') continue;
+      const texto = m.texto.trim().slice(0, 1200);
+      if (!texto || texto.startsWith('Sin conexión')) continue;
+      const role = m.rol === 'usuario' ? 'user' : 'model';
+      const ultimo = turnos[turnos.length - 1];
+      if (ultimo && ultimo.role === role) ultimo.parts[0].text += '\n' + texto;
+      else turnos.push({ role, parts: [{ text: texto }] });
+    }
+  }
+  while (turnos.length && turnos[0].role !== 'user') turnos.shift();
+  const ultimo = turnos[turnos.length - 1];
+  if (ultimo && ultimo.role === 'user') ultimo.parts[0].text += '\n' + promptFinal;
+  else turnos.push({ role: 'user', parts: [{ text: promptFinal }] });
+  return turnos;
+}
 
 // ── Health check ─────────────────────────────────────────────
 app.get('/', (req, res) => {
@@ -95,7 +120,7 @@ app.get('/', (req, res) => {
 
 // ── POST /api/kiro-chat ──────────────────────────────────────
 app.post('/api/kiro-chat', async (req, res) => {
-  const { message, currentRoute, mode } = req.body;
+  const { message, currentRoute, mode, history } = req.body;
 
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return res.status(400).json({ error: 'Mensaje requerido' });
@@ -123,7 +148,7 @@ app.post('/api/kiro-chat', async (req, res) => {
   // Llamada a Gemini API
   const payload = JSON.stringify({
     system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: 'user', parts: [{ text: promptFinal }] }],
+    contents: construirContenido(history, promptFinal),
     generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
   });
 
