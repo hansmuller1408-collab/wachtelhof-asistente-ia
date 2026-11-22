@@ -175,7 +175,8 @@ app.post('/api/kiro-chat', async (req, res) => {
           try {
             const json = JSON.parse(data);
             if (json.error) return reject({ code: json.error.code, message: json.error.message, modelo });
-            const reply = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+            const partes = json?.candidates?.[0]?.content?.parts || [];
+            const reply = partes.filter(x => x.text && !x.thought).map(x => x.text).join('');
             if (reply) resolve(reply.trim());
             else reject({ code: 0, message: 'Sin respuesta', modelo });
           } catch (e) { reject({ code: -1, message: e.message, modelo }); }
