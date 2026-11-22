@@ -124,15 +124,15 @@ app.post('/api/kiro-chat', async (req, res) => {
   const payload = JSON.stringify({
     system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
     contents: [{ role: 'user', parts: [{ text: promptFinal }] }],
-    generationConfig: { maxOutputTokens: 512, temperature: 0.7 },
+    generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
   });
 
   // Modelos en orden de preferencia — intenta el siguiente si el actual falla
   const MODELOS = [
+    'gemini-3.1-flash-lite',
+    'gemini-flash-lite-latest',
+    'gemini-3-flash-preview',
     'gemini-3.8-flash',
-    'gemini-3.7-flash',
-    'gemini-3.5-flash',
-    'gemini-flash-latest',
   ];
 
   async function llamarGemini(modelo) {
@@ -157,6 +157,7 @@ app.post('/api/kiro-chat', async (req, res) => {
         });
       });
       request.on('error', (e) => reject({ code: -1, message: e.message, modelo }));
+      request.setTimeout(12000, () => request.destroy(new Error('timeout 12s')));
       request.write(payload);
       request.end();
     });
